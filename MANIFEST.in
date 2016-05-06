@@ -1,0 +1,9 @@
+include README.md
+include AUTHORS
+include LICENSE
+include CHANGES
+include requirements.txt
+include MANIFEST.in
+include VERSION
+prune tests
+prune docs
