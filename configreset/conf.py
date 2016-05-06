@@ -139,15 +139,6 @@ def _import_module(name, package=None):
     :return:
     """
     if name.startswith('.'):
-        if not package:
-            raise TypeError("relative imports require the 'package' argument")
-        level = 0
-        for character in name:
-            if character != '.':
-                break
-            level += 1
-
-        print _resolve_name(name[level:], package, level)
-        name = _resolve_name(name[level:], package, level)
+        name = '{package}.{module}'.format(package=package, module=str(name).strip('.'))
     __import__(name)
     return sys.modules[name]
