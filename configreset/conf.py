@@ -1,20 +1,24 @@
 # -*- coding: utf-8 -*-
-
+"""
+载入配置文件
+"""
 from __future__ import unicode_literals
 
 import logging
+import os
 import sys
 from collections import OrderedDict
-from importlib import _resolve_name
 
 import six
+
+from configreset.parameter import Parameter
 
 if six.PY2:
     import ConfigParser as configparser
 elif six.PY3:
     import configparser
 
-_logger = logging.getLogger('conf')
+_logger = logging.getLogger('configreset')
 
 if not _logger.handlers:
     _logger = logging
@@ -26,108 +30,198 @@ _CONFIG_CACHE = dict()
 __all__ = ['load', 'load_setting']
 
 
-def load(conf_file, default_section=_DEFAULT_SECTION):
-    conf_dict = load_dict(conf_file, default_section)
-    for k, v in conf_dict.items():
-        pass
+def load_package(package_dir, package=None, exclude=None):
+    init_py = '__init__.py'
+    py_ext = '.py'
+    files = os.listdir(package_dir)
+
+    if exclude:
+        files = [f for f in files if f not in exclude]
+
+    if init_py in files:
+        files = [f for f in files if f != init_py]
+        if package:
+            files.insert(0,package)
+
+    def init_package(item):
+        if str(item).endswith(py_ext):
+            item = item.strip('.py')
+            if package:
+                item = '{package}.{item}'.format(package=package, item=item)
+        return str(item)
+
+    files = [init_package(f) for f in files]
+    return merge(load(*files))
 
 
-def load_dict(conf_file, default_section=_DEFAULT_SECTION):
-    if isinstance(conf_file, list):
-        return _load_from_conf_list(conf_file, default_section)
-    else:
-        return _load_from_conf(conf_file, default_section)
-
-
-def load_from_name(module_name):
+def load(items, default_section=_DEFAULT_SECTION):
     """
-    从python文件中获取配置
-    :param module_name:
+    从混合类型组中读取配置
+    :param items:
     :return:
     """
-    settings = OrderedDict()
-    if isinstance(module_name, six.string_types):
-        settings = _load_from_module(_import_module(module_name))
-    return settings
-
-
-def _load_from_conf(conf_file, default_section=_DEFAULT_SECTION):
-    global _CONFIG_CACHE
-    if conf_file not in _CONFIG_CACHE:
-        if six.PY3:
-            _CONFIG_CACHE[conf_file] = _load_from_conf_py3(conf_file, default_section)
+    settings = []
+    for item in items:
+        print item
+        if item.startswith('ini:') or item.endswith('.ini') or item.endswith('.conf') or item.endswith('.config'):
+            settings.append(load_from_ini(item.strip('ini:')))
         else:
-            _logger.error('使用PY2不支持自定义default_section')
-            _CONFIG_CACHE[conf_file] = _load_from_conf_py2(conf_file)
-    return _CONFIG_CACHE[conf_file]
+            settings.append(load_from_name(item))
+        print settings
+    print settings
+    return merge(settings)
 
 
-def _load_from_conf_py2(conf_file):
+def merge(*settings_list):
     """
-    从配置文件中,获取设置
-    :param default_section:
-    :param conf_file:
+    合并配置
+    :param settings_list:
     :return:
     """
-    cf = configparser.ConfigParser()
-    cf.read(conf_file)
+    if not isinstance(settings_list, list):
+        return settings_list
     settings = OrderedDict()
-    settings['DEFAULT'] = cf.defaults()
-    for section in cf.sections():
-        section_dict = OrderedDict()
-        for option in cf.items(section):
-            section_dict[option[0]] = option[1]
-        settings[section] = section_dict
-
-    return settings
-
-
-def _load_from_conf_py3(conf_file, default_section=_DEFAULT_SECTION):
-    """
-    从配置文件中,获取设置
-    :param default_section:
-    :param conf_file:
-    :return:
-    """
-
-    cf = configparser.ConfigParser(default_section=default_section)
-    cf.read(conf_file)
-    settings = OrderedDict()
-    for item in cf.items():
-        settings[item[0]] = OrderedDict(item[1])
-    return settings
-
-
-def _load_from_conf_list(conf_list, default_section=_DEFAULT_SECTION):
-    """
-    从配置文件中,获取设置
-    :param conf_list:
-    :param default_section:
-    :return:
-    """
-    assert isinstance(conf_list, list), 'conf_list类型必须是list'
-    settings = OrderedDict()
-    for conf_file in conf_list:
-        single_settings = _load_from_conf(conf_file, default_section)
-        for k, v in single_settings.items():
+    for item in settings_list:
+        for k, v in item.items():
             if settings.get(k):
-                settings[k].update(single_settings[k])
+                settings[k].update(item[k])
             else:
                 settings[k] = v
     return settings
 
 
-def _load_from_module(setting_module):
+def config(settings):
+    """
+    将配置文件转为Parameter
+    :param settings:
+    :return:
+    """
+    parameter_settings = Parameter()
+    for k, v in settings.items():
+        if isinstance(v, OrderedDict):
+            k_settings = Parameter()
+            for ki, vi in v.items():
+                k_settings[ki] = vi
+        else:
+            k_settings = v
+        parameter_settings[k] = k_settings
+
+    return parameter_settings
+
+
+def load_from_ini(ini, default_section=_DEFAULT_SECTION):
+    """
+    从单个或多个配置文件读取配置
+    :param ini: string单个，list多个
+    :param default_section:
+    :return:
+    """
+    if isinstance(ini, list):
+        setttings_list = []
+        for item in ini:
+            setttings_list.append(_load_from_ini(ini, default_section))
+            return merge(item, default_section)
+    else:
+        return _load_from_ini(ini, default_section)
+
+
+def load_from_name(module_name):
+    """
+    从python module文件中获取配置
+    :param module_name:
+    :return:
+    """
+    global _CONFIG_CACHE
+    if module_name not in _CONFIG_CACHE:
+        settings = OrderedDict()
+        if isinstance(module_name, six.string_types):
+            settings = _load_from_module(_import_module(module_name))
+        _CONFIG_CACHE[module_name] = settings
+    return _CONFIG_CACHE[module_name]
+
+
+def _load_from_ini(ini, default_section=_DEFAULT_SECTION):
+    """
+    从单个配置文件读取配置
+    :param ini:
+    :param default_section:
+    :return:
+    """
+    global _CONFIG_CACHE
+    if ini not in _CONFIG_CACHE:
+        if six.PY3:
+            _CONFIG_CACHE[ini] = _load_from_ini_py3(ini, default_section)
+        else:
+            _CONFIG_CACHE[ini] = _load_from_ini_py2(ini)
+    return _CONFIG_CACHE[ini]
+
+
+def _load_from_ini_py2(ini):
+    """
+    py2从单个配置文件中,获取设置
+    :param :
+    :param ini:
+    :return:
+    """
+    _logger.debug('使用PY2不支持自定义default_section')
+    default_section = 'DEFAULT'
+    cf = configparser.ConfigParser()
+    cf.read(ini)
+    logging.warn(cf.items('M'))
+
+
+    settings = OrderedDict()
+    for k, v in cf.defaults().items():
+        settings[k.upper()] = v
+
+    logging.warn(settings)
+
+    print cf.items('M')
+    for section in cf.sections():
+        logging.warn(section)
+        section_dict = OrderedDict()
+
+        for option in cf.options(section):
+            logging.warn(option)
+            section_dict[option[0].upper()] = option[1]
+        settings[section] = section_dict
+    if default_section in settings:
+        del settings[default_section]
+    return settings
+
+
+def _load_from_ini_py3(ini, default_section=_DEFAULT_SECTION):
+    """
+    py3从单个配置文件中,获取设置
+    :param default_section:
+    :param ini:
+    :return:
+    """
+
+    cf = configparser.ConfigParser(default_section=default_section)
+    cf.read(ini)
+    settings = OrderedDict()
+    for item in cf.items():
+        settings[item[0].upper()] = OrderedDict(item[1])
+
+    for k, v in cf.get(default_section).items():
+        settings[k.upper()] = v
+    if default_section in settings:
+        del settings[default_section]
+    return settings
+
+
+def _load_from_module(module):
     """
     从python模块中获取配置
-    :param setting_module:
+    :param py:
     :return:
     """
     settings = OrderedDict()
 
-    for key in dir(setting_module):
+    for key in dir(module):
         if key.isupper():
-            settings[key] = getattr(setting_module, key)
+            settings[key] = getattr(module, key)
     return settings
 
 
