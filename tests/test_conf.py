@@ -14,17 +14,15 @@ class ConfTestCase(unittest.TestCase):
         c = conf._load_from_conf(conf_name)
         self.assertEqual('127.0.0.1', c.get('DEFAULT').get('host'))
 
-
     def test_load_from_conf_list(self):
-
-        conf_name = ['etc/setting.ini','etc/setting2.ini']
+        conf_name = ['etc/setting.ini', 'etc/setting2.ini']
         c = conf._load_from_conf_list(conf_name)
-
-        print(c)
-
-
-
         self.assertEqual('8080', c.get('DEFAULT').get('port'))
+
+    def test_load_from_name(self):
+        conf_name = 'settings_conf'
+        c = conf.load_from_name(conf_name)
+        self.assertEqual('192.168.0.1', c.get('HOST'))
 
 
 if __name__ == '__main__':
