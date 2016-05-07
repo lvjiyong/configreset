@@ -4,7 +4,6 @@
 """
 from __future__ import unicode_literals
 
-import logging
 import os
 import sys
 from collections import OrderedDict
@@ -18,61 +17,86 @@ if six.PY2:
 elif six.PY3:
     import configparser
 
-_logger = logging.getLogger('configreset')
-
-if not _logger.handlers:
-    _logger = logging
+from log import logger
 
 _DEFAULT_SECTION = 'DEFAULT'
 
 _CONFIG_CACHE = dict()
 
-__all__ = ['load', 'load_setting']
+__all__ = ['reset', 'load_package']
 
 
-def load_package(package_dir, package=None, exclude=None):
+def reset(target, settings):
+    """
+    重置设置
+    :param target:
+    :param settings:
+    :return:
+    """
+    target_settings = _import_module(target)
+    for k, v in settings.items():
+        if hasattr(target_settings, k):
+            setattr(target_settings, k, _get_value(getattr(target_settings, k), v))
+        else:
+            logger.debug('AttributeError {target} has no attribute {k}'.format(target=target, k=k))
+    return target_settings
+
+
+def load_package(package_dir, package=None, exclude=None, default_section=_DEFAULT_SECTION):
+    """
+    从目录中载入配置文件
+    :param package_dir:
+    :param package:
+    :param exclude:
+    :param default_section:
+    :return:
+    """
     init_py = '__init__.py'
     py_ext = '.py'
     files = os.listdir(package_dir)
-
-    if exclude:
-        files = [f for f in files if f not in exclude]
-
     if init_py in files:
         files = [f for f in files if f != init_py]
         if package:
-            files.insert(0,package)
+            files.insert(0, package)
 
     def init_package(item):
         if str(item).endswith(py_ext):
-            item = item.strip('.py')
+            item = item[:-3]
             if package:
                 item = '{package}.{item}'.format(package=package, item=item)
+        elif _is_conf(item):
+            item = '{package_dir}/{item}'.format(package_dir=package_dir, item=item)
+        else:
+            item = package
         return str(item)
 
+    logger.debug(files)
     files = [init_package(f) for f in files]
-    return merge(load(*files))
+    if exclude:
+        files = [f for f in files if f not in exclude]
+
+    settings = load(files, default_section)
+    return merge(settings)
 
 
 def load(items, default_section=_DEFAULT_SECTION):
     """
     从混合类型组中读取配置
+    :param default_section:
     :param items:
     :return:
     """
     settings = []
+    logger.debug(items)
     for item in items:
-        print item
-        if item.startswith('ini:') or item.endswith('.ini') or item.endswith('.conf') or item.endswith('.config'):
-            settings.append(load_from_ini(item.strip('ini:')))
+        if _is_conf(item):
+            settings.append(load_from_ini(item, default_section))
         else:
             settings.append(load_from_name(item))
-        print settings
-    print settings
     return merge(settings)
 
 
-def merge(*settings_list):
+def merge(settings_list):
     """
     合并配置
     :param settings_list:
@@ -83,8 +107,8 @@ def merge(*settings_list):
     settings = OrderedDict()
     for item in settings_list:
         for k, v in item.items():
-            if settings.get(k):
-                settings[k].update(item[k])
+            if settings.get(k) and isinstance(v, OrderedDict):
+                settings[k].update(v)
             else:
                 settings[k] = v
     return settings
@@ -109,22 +133,6 @@ def config(settings):
     return parameter_settings
 
 
-def load_from_ini(ini, default_section=_DEFAULT_SECTION):
-    """
-    从单个或多个配置文件读取配置
-    :param ini: string单个，list多个
-    :param default_section:
-    :return:
-    """
-    if isinstance(ini, list):
-        setttings_list = []
-        for item in ini:
-            setttings_list.append(_load_from_ini(ini, default_section))
-            return merge(item, default_section)
-    else:
-        return _load_from_ini(ini, default_section)
-
-
 def load_from_name(module_name):
     """
     从python module文件中获取配置
@@ -140,7 +148,7 @@ def load_from_name(module_name):
     return _CONFIG_CACHE[module_name]
 
 
-def _load_from_ini(ini, default_section=_DEFAULT_SECTION):
+def load_from_ini(ini, default_section=_DEFAULT_SECTION):
     """
     从单个配置文件读取配置
     :param ini:
@@ -163,30 +171,18 @@ def _load_from_ini_py2(ini):
     :param ini:
     :return:
     """
-    _logger.debug('使用PY2不支持自定义default_section')
-    default_section = 'DEFAULT'
+    logger.debug('使用PY2不支持自定义default_section，其默认值是:%s' % _DEFAULT_SECTION)
     cf = configparser.ConfigParser()
     cf.read(ini)
-    logging.warn(cf.items('M'))
-
-
     settings = OrderedDict()
     for k, v in cf.defaults().items():
         settings[k.upper()] = v
-
-    logging.warn(settings)
-
-    print cf.items('M')
+    cf._defaults = {}
     for section in cf.sections():
-        logging.warn(section)
         section_dict = OrderedDict()
-
-        for option in cf.options(section):
-            logging.warn(option)
-            section_dict[option[0].upper()] = option[1]
+        for option in cf.items(section):
+            section_dict[option[0]] = option[1]
         settings[section] = section_dict
-    if default_section in settings:
-        del settings[default_section]
     return settings
 
 
@@ -204,7 +200,7 @@ def _load_from_ini_py3(ini, default_section=_DEFAULT_SECTION):
     for item in cf.items():
         settings[item[0].upper()] = OrderedDict(item[1])
 
-    for k, v in cf.get(default_section).items():
+    for k, v in cf.items(default_section):
         settings[k.upper()] = v
     if default_section in settings:
         del settings[default_section]
@@ -236,3 +232,30 @@ def _import_module(name, package=None):
         name = '{package}.{module}'.format(package=package, module=str(name).strip('.'))
     __import__(name)
     return sys.modules[name]
+
+
+def _is_conf(item):
+    return item.endswith('.ini') or item.endswith('.conf') or item.endswith('.config')
+
+
+def _get_value(first, second):
+    """
+    数据转化
+    :param first:
+    :param second:
+    :return:
+    >>> _get_value(1,'2')
+    2
+    >>> _get_value([1,2],[2,3])
+    [1, 2, 3]
+    """
+
+    if isinstance(first, list) and isinstance(second, list):
+        return list(set(first).union(set(second)))
+    elif isinstance(first, dict) and isinstance(second, dict):
+        first.update(second)
+        return first
+    elif first is not None and second is not None and not isinstance(first, type(second)):
+        return type(first)(second)
+    else:
+        return second
