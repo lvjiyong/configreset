@@ -10,9 +10,9 @@ with open(join(project_dir, 'VERSION'), 'rb') as f:
     version = f.read().decode('ascii').strip()
 
 setup(
-    name="ConfigReset",
+    name="configreset",
     version=version,
-    description="ConfigReset",
+    description="configreset",
     author="lvjiyong",
     url="https://github.com/lvjiyong/configreset",
     license="GPL",
