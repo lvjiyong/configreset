@@ -93,6 +93,9 @@ def load(items, default_section=_DEFAULT_SECTION):
     :return:
     """
     settings = []
+
+    assert isinstance(items,list), 'items必须为list'
+
     logger.debug(items)
     for item in items:
         if _is_conf(item):
