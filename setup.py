@@ -6,8 +6,8 @@ from setuptools import setup, find_packages
 
 project_dir = dirname(__file__)
 
-with open(join(project_dir, 'VERSION'), 'rb') as f:
-    version = f.read().decode('ascii').strip()
+with open(join(project_dir, 'VERSION'), 'r') as f:
+    version = f.read().strip()
 
 setup(
     name="configreset",
@@ -18,7 +18,7 @@ setup(
     license="GPL",
     include_package_data=True,
     packages=find_packages(exclude=()),
-    long_description=open(join(project_dir, 'README')).read(),
+    long_description=open(join(project_dir, 'README'), encoding='utf-8').read(),
     maintainer='lvjiyong',
     platforms=["any"],
     maintainer_email='lvjiyong@gmail.com',
