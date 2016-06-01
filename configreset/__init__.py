@@ -4,6 +4,7 @@
 """
 from __future__ import unicode_literals
 
+import json
 import logging
 import os
 import sys
@@ -21,6 +22,7 @@ elif six.PY3:
 _log_console = logging.StreamHandler(sys.stderr)
 _formatter = logging.Formatter("%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s")
 _log_console.setFormatter(_formatter)
+
 logger = logging.getLogger('configreset')
 logger.setLevel(logging.ERROR)
 logger.addHandler(_log_console)
@@ -94,7 +96,7 @@ def load(items, default_section=_DEFAULT_SECTION):
     """
     settings = []
 
-    assert isinstance(items,list), 'items必须为list'
+    assert isinstance(items, list), 'items必须为list'
 
     logger.debug(items)
     for item in items:
@@ -185,7 +187,7 @@ def _load_from_ini_py2(ini):
     cf.read(ini)
     settings = OrderedDict()
     for k, v in cf.defaults().items():
-        settings[k.upper()] = v
+        settings[k.upper()] = convert_value(v)
     cf._defaults = {}
     for section in cf.sections():
         section_dict = OrderedDict()
@@ -193,6 +195,23 @@ def _load_from_ini_py2(ini):
             section_dict[option[0]] = option[1]
         settings[section] = section_dict
     return settings
+
+
+def convert_value(v):
+    """
+    默认使用Json转化数据,凡以[或{开始的,均载入json
+    :param v:
+    :return:
+    """
+    if v and isinstance(v, six.string_types):
+        v = v.strip()
+        if (v.startswith('{') and v.endswith('}')) or (v.startswith('[') and v.endswith(']')):
+            try:
+                return json.loads(v)
+            except Exception as e:
+                logger.error(e)
+
+    return v
 
 
 def _load_from_ini_py3(ini, default_section=_DEFAULT_SECTION):
@@ -210,7 +229,7 @@ def _load_from_ini_py3(ini, default_section=_DEFAULT_SECTION):
         settings[item[0].upper()] = OrderedDict(item[1])
 
     for k, v in cf.items(default_section):
-        settings[k.upper()] = v
+        settings[k.upper()] = convert_value(v)
     if default_section in settings:
         del settings[default_section]
     return settings
