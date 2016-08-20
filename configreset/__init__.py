@@ -104,7 +104,9 @@ def load(items, default_section=_DEFAULT_SECTION):
             settings.append(load_from_ini(item, default_section))
         else:
             settings.append(load_from_name(item))
+    logger.debug(settings)
     return merge(settings)
+
 
 
 def merge(settings_list):
@@ -169,9 +171,12 @@ def load_from_ini(ini, default_section=_DEFAULT_SECTION):
     global _CONFIG_CACHE
     if ini not in _CONFIG_CACHE:
         if six.PY3:
+            logger.debug("PY3........")
             _CONFIG_CACHE[ini] = _load_from_ini_py3(ini, default_section)
         else:
             _CONFIG_CACHE[ini] = _load_from_ini_py2(ini)
+
+    logger.debug(_CONFIG_CACHE[ini])
     return _CONFIG_CACHE[ini]
 
 
@@ -226,12 +231,24 @@ def _load_from_ini_py3(ini, default_section=_DEFAULT_SECTION):
     cf.read(ini)
     settings = OrderedDict()
     for item in cf.items():
+        logger.debug(item[0])
         settings[item[0].upper()] = OrderedDict(item[1])
 
+    logger.debug(settings)
     for k, v in cf.items(default_section):
+    # for k, v in cf.items():
+        logger.debug(v)
+        logger.debug(settings)
+        logger.debug(settings.get(k))
         settings[k.upper()] = convert_value(v)
+        logger.debug(settings)
+        if k.lower() in settings:
+            del settings[k.lower()]
+
     if default_section in settings:
         del settings[default_section]
+
+    logger.debug(settings)
     return settings
 
 

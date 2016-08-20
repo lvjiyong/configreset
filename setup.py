@@ -18,7 +18,7 @@ setup(
     license="GPL",
     include_package_data=True,
     packages=find_packages(exclude=()),
-    long_description=open(join(project_dir, 'README')).read(),
+    long_description=open(join(project_dir, 'README'), 'r').read(),
     maintainer='lvjiyong',
     platforms=["any"],
     maintainer_email='lvjiyong@gmail.com',
