@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 project_dir = dirname(__file__)
 
-with open(join(project_dir, 'VERSION'), 'r',encoding='utf-8') as f:
+with open(join(project_dir, 'VERSION'), 'r') as f:
     version = f.read().strip()
 
 setup(
