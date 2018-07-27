@@ -228,7 +228,7 @@ def _load_from_ini_py3(ini, default_section=_DEFAULT_SECTION):
     """
 
     cf = configparser.ConfigParser(default_section=default_section)
-    cf.read(ini)
+    cf.read(ini, encoding="UTF8")
     settings = OrderedDict()
     for item in cf.items():
         logger.debug(item[0])
